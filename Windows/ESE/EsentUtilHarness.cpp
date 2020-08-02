@@ -52,7 +52,7 @@ int main(int argc, char** argv)
     }
 
     // Free the DLL module.
-    //free(result_buff);
+    free(result_buff);
     FreeLibrary(hinstLib); 
 
 }
