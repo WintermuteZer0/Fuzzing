@@ -24,7 +24,6 @@ def get_functions(file):
     except CppHeaderParser.CppParseError as e:
         print(e)
         return {}
-        
 
     for f in cppHeader.functions:
         param_list = f['parameters']
@@ -69,7 +68,8 @@ CREATE TABLE Prototypes (
     )"""
 CREATE_PROTO_TABLE2= """
 CREATE TABLE Prototypes (
-    header_file text PRIMARY KEY,
+    id int PRIMARY KEY ,
+    header_file text NOT NULL,
     proto text NOT NULL 
     )"""
 CREATE_PARAM_TABLE = """
@@ -79,35 +79,48 @@ CREATE TABLE Parameters (
     Type text NOT NULL
 )"""
 
-INSERT_PROTO_ENTRY ="""INSERT INTO Prototypes (header_file,proto) as (?,?) """
+INSERT_PROTO_ENTRY ="""INSERT INTO Prototypes (header_file,proto) VALUES (?,?) """
 
-SEARCH_PROTO_KEYWORD = """ SELECT * FROM Prototypes WHERE proto LIKE %?%"""
+SEARCH_PROTO_KEYWORD = """SELECT * FROM Prototypes WHERE proto LIKE '%{}%'"""
 
 # Create SQLlite db connection 
 def db_connect(file=DEFAULT_PATH):
-    con = sqllite.connect(file)
+    con = sqlite3.connect(file)
     return con
 
 def insert_prototype(con, header, function):
-     cur =con.cursor()
+    cur =con.cursor()
     try:
         # Loop through prototypes  in given header file and execute INSERTS 
         for prototype in function:
-            cur.execute(INSERT_PROTO_ENTRY, header,prototype)
+            print (header)
+            print(prototype)
+            cur.execute(INSERT_PROTO_ENTRY, (header,prototype))
         con.commit()
         return cur.lastrowid
-    except:
+    except sqlite3.Error as er:
         # Rolback on error
         con.rollback()
-        raise RuntimeError('Uh Oh Failed Commit....')
+        print('[!] SQLite error: %s' % (' '.join(er.args)))
+        #print("Exception class is: ", er.__class__)
+        #print('SQLite traceback: ')
+        #exc_type, exc_value, exc_tb = sys.exc_info()
+        ##print(traceback.format_exception(exc_type, exc_value, exc_tb))
+        con.close()
+        #raise RuntimeError('Uh Oh Failed Commit....')
+
+
+def search_keyword(con,keyword):
+    cur = con.cursor()
+    cur.execute(SEARCH_PROTO_KEYWORD.format(keyword))
+    return cur.fetchall()
 
 
 def create_database(file):
-    from db_utils import db_connect
     con = db_connect(file)
     cur = con.cursor()
     cur.execute(CREATE_PROTO_TABLE2)
-    print('[>>] API Database successfully created!')
+    print('[*] API Database successfully created!')
 
 
 ########################################
@@ -117,7 +130,7 @@ def parse_headers():
     files = get_target_headers('C:\Users\IEUser\Desktop\TargetFiles')
     funcDict={}
     for file in files:
-        print("[>>>] Procesing:{} ".format(file))
+        print("[*] Processing:{} ".format(file))
         if file not in funcDict:
             funcDict[file]=get_functions(file)
         else:
@@ -126,25 +139,28 @@ def parse_headers():
 
 
 def main():
-   
-    db_file = input('[>>>] Please enter an existing DB location: ')
+    db_file = input('[>>>] Please enter an existing or new DB location: ')
     if os.path.exists(db_file):
+        print('[*] File exists!')
         con = db_connect(db_file)
         if con:
             keyword = input('[>>>] Please enter a search term: ')
+            print(keyword)
+            result = search_keyword(con,keyword)
+            for row in result:
+                print(row)
+
     else:
-        create_database(file)
+        print('[*] File does not exist, creating new DB')
+        create_database(db_file)
         in_mem = parse_headers()
+        con = db_connect(db_file)
+        for header, proto in in_mem.items():
+            insert_prototype(con, header,proto)  
     
-    
-    
-    
-    
-    
-    
-    
-    for result in keyword_search(str(keyword),funcDict):
-        print(result)
+    # Search for keyword
+    #for result in keyword_search(str(keyword),funcDict):
+    #    print(result)
 
 if __name__ == "__main__":
     main()
